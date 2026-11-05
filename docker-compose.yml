@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------
+  # 1. Cloud / Local MySQL Database
+  # -------------------------------------------------------------
+  mysql-db:
+    image: mysql:8.0
+    container_name: skillarena-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: skillarena_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - skillarena-network
+
+  # -------------------------------------------------------------
+  # 2. Python AI Analytical Microservice
+  # -------------------------------------------------------------
+  ai-engine:
+    build:
+      context: ./ai-engine
+      dockerfile: Dockerfile
+    container_name: skillarena-ai-engine
+    restart: always
+    ports:
+      - "8000:8000"
+    networks:
+      - skillarena-network
+
+  # -------------------------------------------------------------
+  # 3. Spring Boot REST Backend
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: skillarena-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql-db
+      - ai-engine
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/skillarena_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: password
+      AI_SERVICE_URL: http://ai-engine:8000
+    networks:
+      - skillarena-network
+
+  # -------------------------------------------------------------
+  # 4. React.js Frontend
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: skillarena-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - skillarena-network
+
+networks:
+  skillarena-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+
